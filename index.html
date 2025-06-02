@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Strategy Backtester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+            color: #334155; /* slate-700 */
+        }
+        .view { display: none; }
+        .active-view { display: block; }
+        .sidebar { background-color: #1e293b; /* slate-800 */ }
+        .sidebar-link {
+            display: flex; align-items: center; padding: 0.75rem 1.25rem;
+            border-radius: 0.375rem; color: #cbd5e1; /* slate-300 */
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+            font-weight: 500; /* medium */
+        }
+        .sidebar-link svg { margin-right: 0.75rem; width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+        .sidebar-link:hover { background-color: #334155; /* slate-700 */ color: white; }
+        .sidebar-link.active { background-color: #4f46e5; /* indigo-600 */ color: white; font-weight: 600; }
+        .card {
+            background-color: white; border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1); /* shadow-md */
+            padding: 1.5rem; /* p-6 */
+        }
+        .modal {
+            display: none; position: fixed; z-index: 50; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.6);
+        }
+        .modal-content {
+            background-color: white; margin: 10% auto; padding: 2rem; /* p-8 */
+            border-radius: 0.5rem; width: 90%; max-width: 500px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+        }
+        .table th, .table td { padding: 0.75rem 1rem; border-bottom: 1px solid #e2e8f0; /* slate-200 */ }
+        .table th { background-color: #f8fafc; /* slate-50 */ font-weight: 600; text-align: left; color: #475569; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.625rem 1.25rem; border-radius: 0.375rem; font-weight: 500;
+            transition: background-color 0.2s ease-in-out; border: 1px solid transparent;
+        }
+        .btn-primary { background-color: #4f46e5; color: white; }
+        .btn-primary:hover { background-color: #4338ca; }
+        .btn-secondary { background-color: #e2e8f0; color: #1e293b; }
+        .btn-secondary:hover { background-color: #cbd5e1; }
+        .btn-success { background-color: #10b981; color: white; }
+        .btn-success:hover { background-color: #059669; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-warning { background-color: #f59e0b; color: white; }
+        .btn-warning:hover { background-color: #d97706; }
+        .btn-purple { background-color: #8b5cf6; color: white; }
+        .btn-purple:hover { background-color: #7c3aed; }
+        .btn-teal { background-color: #14b8a6; color: white; }
+        .btn-teal:hover { background-color: #0d9488; }
+        .btn svg { margin-right: 0.5rem; }
+        .form-input, .form-select, .form-textarea {
+            display: block; width: 100%; padding: 0.5rem 0.75rem;
+            border: 1px solid #cbd5e1; /* slate-300 */ border-radius: 0.375rem;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none; border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+        }
+        .tab-button {
+            padding: 0.5rem 1rem; font-medium; color: #475569; /* slate-600 */
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .tab-button.active { color: #4f46e5; /* indigo-600 */ border-bottom-color: #4f46e5; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="flex h-screen">
+
+    <aside id="appSidebar" class="sidebar w-64 p-4 space-y-2 fixed h-full flex flex-col">
+        <div class="flex items-center space-x-2 px-2 mb-4">
+            <svg class="h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+            </svg>
+            <h1 class="text-2xl font-semibold text-white">TradeMaster</h1>
+        </div>
+        <nav class="flex-grow space-y-1">
+            <a href="#" class="sidebar-link active" onclick="showView('dashboardView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 8.25 20.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+                Dashboard
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('strategiesView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" /></svg>
+                My Strategies
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('createStrategyView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                Create Strategy
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('runBacktestView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+                Run Backtest
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('backtestHistoryView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+                Backtest History
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('comparisonView', this); showComparisonTab('interCompareTabContent', document.querySelector('#comparisonView .tab-button[onclick*=\'interCompareTabContent\']'))">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" /></svg>
+                Compare Results
+            </a>
+            <a href="#" class="sidebar-link" onclick="showView('comparisonHistoryView', this)">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h12A2.25 2.25 0 0 1 20.25 6v3.776" /></svg>
+                Comparison History
+            </a>
+        </nav>
+        <div class="mt-auto border-t border-slate-700 pt-4 space-y-2">
+            <a href="#" class="sidebar-link" onclick="showView('profileView', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                Profile
+            </a>
+            <div id="userInfoDisplay" class="px-3 py-2 hidden">
+                <p class="text-sm font-medium text-white" id="userDisplayName">User Name</p>
+                <p class="text-xs text-slate-400" id="userDisplayEmail">user@example.com</p>
+            </div>
+            <a href="#" class="sidebar-link" onclick="logoutUser();">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+                Logout
+            </a>
+        </div>
+    </aside>
+
+    <main id="mainContent" class="flex-1 ml-64 p-6 md:p-8 overflow-y-auto">
+
+        <div id="loginView" class="view active-view">
+            <div class="min-h-full flex items-center justify-center">
+                <div class="max-w-md w-full space-y-8 card">
+                    <div>
+                        <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">
+                            Sign in to TradeMaster
+                        </h2>
+                    </div>
+                    <form class="mt-8 space-y-6" action="#" method="POST" onsubmit="event.preventDefault(); loginUser();">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="login-email-address" class="block text-sm font-medium text-slate-700">Email address</label>
+                                <input id="login-email-address" name="email" type="email" autocomplete="email" required class="form-input mt-1" placeholder="you@example.com" value="user@example.com">
+                            </div>
+                            <div>
+                                <label for="login-password" class="block text-sm font-medium text-slate-700">Password</label>
+                                <input id="login-password" name="password" type="password" autocomplete="current-password" required class="form-input mt-1" placeholder="Password" value="password">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-end">
+                            <div class="text-sm">
+                                <a href="#" onclick="showView('registerView', document.querySelector('.sidebar-link[onclick*=\'registerView\']'));" class="font-medium text-indigo-600 hover:text-indigo-500">
+                                    Don't have an account? Register
+                                </a>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button type="submit" class="btn btn-primary w-full">
+                                Sign in
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="registerView" class="view">
+             <div class="min-h-full flex items-center justify-center">
+                <div class="max-w-md w-full space-y-8 card">
+                    <div>
+                        <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">
+                            Create your account
+                        </h2>
+                    </div>
+                    <form class="mt-8 space-y-6" action="#" method="POST" onsubmit="event.preventDefault(); registerUser();">
+                        <div class="space-y-4">
+                            <div>
+                                <label for="register-username" class="block text-sm font-medium text-slate-700">Username</label>
+                                <input id="register-username" name="username" type="text" required class="form-input mt-1" placeholder="Your Username">
+                            </div>
+                            <div>
+                                <label for="register-email-address" class="block text-sm font-medium text-slate-700">Email address</label>
+                                <input id="register-email-address" name="email" type="email" autocomplete="email" required class="form-input mt-1" placeholder="you@example.com">
+                            </div>
+                            <div>
+                                <label for="register-password" class="block text-sm font-medium text-slate-700">Password</label>
+                                <input id="register-password" name="password" type="password" autocomplete="new-password" required class="form-input mt-1" placeholder="Create a Password">
+                            </div>
+                        </div>
+                         <div class="flex items-center justify-end">
+                            <div class="text-sm">
+                                <a href="#" onclick="showView('loginView', document.querySelector('.sidebar-link[onclick*=\'loginView\']'));" class="font-medium text-indigo-600 hover:text-indigo-500">
+                                    Already have an account? Sign in
+                                </a>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="submit" class="btn btn-primary w-full">
+                                Register
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div id="dashboardView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Dashboard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card">
+                    <h3 class="text-lg font-medium text-slate-600">Total Strategies</h3>
+                    <p id="totalStrategiesStat" class="text-4xl font-bold text-indigo-600 mt-1">0</p>
+                </div>
+                <div class="card">
+                    <h3 class="text-lg font-medium text-slate-600">Total Backtests Run</h3>
+                    <p id="totalBacktestsStat" class="text-4xl font-bold text-indigo-600 mt-1">0</p>
+                </div>
+                <div class="card">
+                    <h3 class="text-lg font-medium text-slate-600">Overall PnL (Mock)</h3>
+                    <p class="text-4xl font-bold text-emerald-500 mt-1">$+1,250.75</p>
+                </div>
+            </div>
+
+            <div class="mt-8 card">
+                <h3 class="text-xl font-semibold text-slate-700 mb-4">Recent Backtest Runs</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>Strategy</th>
+                                <th>Date</th>
+                                <th>PnL</th>
+                                <th>Sharpe Ratio</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentBacktestsTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="strategiesView" class="view">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-semibold text-slate-800">My Strategies</h2>
+                <button onclick="showView('createStrategyView', document.querySelector('a[onclick*=\"createStrategyView\"]'))" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    New Strategy
+                </button>
+            </div>
+            <div class="card">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr>
+                                <th>Strategy Name</th>
+                                <th>Created</th>
+                                <th>Last Modified</th>
+                                <th class="text-center">Backtest Runs</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="myStrategiesTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div id="strategyBacktestsView" class="view">
+            <div class="flex items-center mb-6">
+                <button onclick="showView('strategiesView', document.querySelector('a[onclick*=\"strategiesView\"]'))" class="mr-3 p-2 rounded-md hover:bg-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-slate-600"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                </button>
+                <h2 class="text-3xl font-semibold text-slate-800">Backtest Runs for <span id="strategyBacktestsName" class="text-indigo-600">Strategy</span></h2>
+            </div>
+            <div class="card">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>Stocks</th>
+                                <th>Period</th>
+                                <th>Date Run</th>
+                                <th>PnL</th>
+                                <th>Sharpe Ratio</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="strategyBacktestsTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                     <p id="noStrategyBacktestsMessage" class="text-center text-slate-500 py-4 hidden">No backtest runs found for this strategy.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="createStrategyView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Create / Edit Strategy</h2>
+            <div class="card">
+                <form id="strategyForm" onsubmit="event.preventDefault(); saveStrategy();">
+                    <input type="hidden" id="strategyId">
+                    <div class="mb-5">
+                        <label for="strategyName" class="block text-sm font-medium text-slate-700 mb-1">Strategy Name</label>
+                        <input type="text" id="strategyName" name="strategyName" required class="form-input" placeholder="e.g., Moving Average Crossover">
+                    </div>
+                    <div class="mb-5">
+                        <label for="strategyLogic" class="block text-sm font-medium text-slate-700 mb-1">Strategy Logic</label>
+                        <textarea id="strategyLogic" name="strategyLogic" rows="10" required class="form-textarea font-mono text-sm" placeholder="Example: close > avg(close, 20) AND volume > avg(volume, 10)"></textarea>
+                        <p class="mt-2 text-xs text-slate-500">Supported: +, -, *, /, &lt;, &gt;, !=, ==, AND, OR, avg(field, N). Fields: open, close, high, low, volume.</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button type="submit" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                            Save Strategy
+                        </button>
+                         <button type="button" onclick="clearStrategyForm(); showView('strategiesView', document.querySelector('a[onclick*=\"strategiesView\"]'))" class="btn btn-secondary">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="runBacktestView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Run New Backtest</h2>
+            <div class="card">
+                <form id="backtestForm" onsubmit="event.preventDefault(); runBacktest();">
+                    <div class="mb-4">
+                        <label for="backtestStrategy" class="block text-sm font-medium text-slate-700 mb-1">Select Strategy</label>
+                        <select id="backtestStrategy" name="backtestStrategy" required class="form-select"></select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="backtestStocks" class="block text-sm font-medium text-slate-700 mb-1">Stock Tickers (comma-separated)</label>
+                        <input type="text" id="backtestStocks" name="backtestStocks" required class="form-input" placeholder="e.g., RELIANCE.NS, TCS.NS" value="RELIANCE.NS">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="backtestStartDate" class="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                            <input type="date" id="backtestStartDate" name="backtestStartDate" required class="form-input" value="2023-01-01">
+                        </div>
+                        <div>
+                            <label for="backtestEndDate" class="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                            <input type="date" id="backtestEndDate" name="backtestEndDate" required class="form-input" value="2023-12-31">
+                        </div>
+                    </div>
+                     <div class="mb-6">
+                        <label for="backtestLookback" class="block text-sm font-medium text-slate-700 mb-1">Or, Quick Lookback Period</label>
+                        <select id="backtestLookback" name="backtestLookback" class="form-select">
+                            <option value="0">Custom Dates Above</option>
+                            <option value="1">1 Year</option>
+                            <option value="2">2 Years</option>
+                            <option value="3">3 Years</option>
+                            <option value="5">5 Years</option>
+                            <option value="10">10 Years</option>
+                        </select>
+                        <p class="mt-1 text-xs text-slate-500">Selecting a lookback period will override custom start/end dates.</p>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 0 1 0 .656l-5.603 3.113a.375.375 0 0 1-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112Z" /></svg>
+                            Run Backtest
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="backtestResultsView" class="view">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-semibold text-slate-800">Backtest Results</h2>
+                <button onclick="saveBacktestRun()" class="btn btn-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.663V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.663L18.288 5.338A2.25 2.25 0 0 0 16.138 3.75H14.25M9 3.75 12 3m0 0 3-3.75M12 3v5.732A9.001 9.001 0 0 0 6.708 21M12 3c.891 0 1.734.178 2.5.513M15 3.75 12 3m0 0-3-3.75M12 3C11.109 3 10.266.178 9.5.513" /></svg>
+                    Save This Run
+                </button>
+            </div>
+            <div class="card mb-6">
+                <h3 class="text-xl font-semibold text-slate-700 mb-3">Summary</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div><strong class="text-slate-600">Strategy:</strong> <span id="resultStrategyName" class="text-slate-800">N/A</span></div>
+                    <div><strong class="text-slate-600">Stocks:</strong> <span id="resultStocks" class="text-slate-800">N/A</span></div>
+                    <div><strong class="text-slate-600">Period:</strong> <span id="resultPeriod" class="text-slate-800">N/A</span></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <p class="text-md font-medium text-slate-600">Total PnL:</p>
+                        <p id="resultPnl" class="text-3xl font-bold">$0.00</p>
+                    </div>
+                    <div>
+                        <p class="text-md font-medium text-slate-600">Sharpe Ratio:</p>
+                        <p id="resultSharpe" class="text-3xl font-bold">0.00</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-6">
+                <h3 class="text-xl font-semibold text-slate-700 mb-3">Portfolio Value Over Time</h3>
+                <canvas id="portfolioChart" height="120"></canvas>
+            </div>
+            <div class="card">
+                 <h3 class="text-xl font-semibold text-slate-700 mb-3">Detailed PnL (Sample)</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr><th>Date</th><th>Daily PnL</th><th>Cumulative PnL</th><th>Portfolio Value</th></tr>
+                        </thead>
+                        <tbody id="detailedPnlTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="backtestHistoryView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Backtest History</h2>
+            <div class="card">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr>
+                                <th>Run ID</th>
+                                <th>Strategy</th>
+                                <th>Stocks</th>
+                                <th>Period</th>
+                                <th>Date Run</th>
+                                <th>PnL</th>
+                                <th>Sharpe Ratio</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="backtestHistoryTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="comparisonView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Compare Backtest Results</h2>
+            <div class="mb-6 border-b border-slate-200">
+                <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                    <button class="tab-button active" onclick="showComparisonTab('interCompareTabContent', this)">Inter-Strategy</button>
+                    <button class="tab-button" onclick="showComparisonTab('intraCompareTabContent', this)">Intra-Strategy</button>
+                </nav>
+            </div>
+
+            <div id="interCompareTabContent" class="tab-content active">
+                <div class="card">
+                    <h3 class="text-xl font-semibold text-slate-700 mb-1">Inter-Strategy Comparison</h3>
+                    <p class="text-sm text-slate-500 mb-4">Compare different strategies on the same timeline and stock(s).</p>
+                    <form id="interStrategyForm" onsubmit="event.preventDefault(); runInterStrategyComparison();">
+                         <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Select Strategies (multiple)</label>
+                            <select id="interCompareStrategies" name="interCompareStrategies" multiple required class="form-select h-32"></select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="interCompareStocks" class="block text-sm font-medium text-slate-700 mb-1">Stock Tickers</label>
+                            <input type="text" id="interCompareStocks" name="interCompareStocks" required class="form-input" placeholder="e.g., RELIANCE.NS" value="RELIANCE.NS">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="interCompareStartDate" class="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                                <input type="date" id="interCompareStartDate" name="interCompareStartDate" required class="form-input" value="2023-01-01">
+                            </div>
+                            <div>
+                                <label for="interCompareEndDate" class="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                                <input type="date" id="interCompareEndDate" name="interCompareEndDate" required class="form-input" value="2023-12-31">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-purple">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Zm3.75 14.25a1.125 1.125 0 1 1-2.25 0 1.125 1.125 0 0 1 2.25 0Z" /></svg>
+                            Compare Inter-Strategy
+                        </button>
+                    </form>
+                    <div id="interComparisonResults" class="mt-6 hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-lg font-semibold text-slate-700">Comparison Chart</h4>
+                            <button id="saveInterComparisonBtn" onclick="promptSaveComparison('inter')" class="btn btn-success btn-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.663V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.663L18.288 5.338A2.25 2.25 0 0 0 16.138 3.75H14.25M9 3.75 12 3m0 0 3-3.75M12 3v5.732A9.001 9.001 0 0 0 6.708 21M12 3c.891 0 1.734.178 2.5.513M15 3.75 12 3m0 0-3-3.75M12 3C11.109 3 10.266.178 9.5.513" /></svg>
+                                Save Comparison
+                            </button>
+                        </div>
+                        <canvas id="interStrategyChart" height="120"></canvas>
+                        <h4 class="text-lg font-semibold text-slate-700 mt-6 mb-2">Metrics Table</h4>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full table">
+                                <thead><tr><th>Strategy</th><th>PnL</th><th>Sharpe Ratio</th></tr></thead>
+                                <tbody id="interMetricsTable" class="text-sm text-slate-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="intraCompareTabContent" class="tab-content">
+                <div class="card">
+                    <h3 class="text-xl font-semibold text-slate-700 mb-1">Intra-Strategy Comparison</h3>
+                    <p class="text-sm text-slate-500 mb-4">Compare the same strategy on different timelines or different stocks.</p>
+                    <form id="intraStrategyForm" onsubmit="event.preventDefault(); runIntraStrategyComparison();">
+                        <div class="mb-4">
+                            <label for="intraCompareStrategy" class="block text-sm font-medium text-slate-700 mb-1">Select Strategy</label>
+                            <select id="intraCompareStrategy" name="intraCompareStrategy" required class="form-select"></select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Compare by:</label>
+                            <div class="mt-2 flex space-x-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="intraCompareType" value="stocks" class="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4" checked onchange="toggleIntraCompareFields()">
+                                    <span class="ml-2 text-sm text-slate-700">Different Stocks</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="intraCompareType" value="timelines" class="form-radio text-indigo-600 focus:ring-indigo-500 h-4 w-4" onchange="toggleIntraCompareFields()">
+                                    <span class="ml-2 text-sm text-slate-700">Different Timelines</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="intraCompareStocksGroup" class="mb-4 space-y-4">
+                            <div>
+                                <label for="intraCompareStocksList" class="block text-sm font-medium text-slate-700 mb-1">Stock Tickers (comma-separated, multiple)</label>
+                                <input type="text" id="intraCompareStocksList" name="intraCompareStocksList" class="form-input" placeholder="RELIANCE.NS, TCS.NS" value="RELIANCE.NS, TCS.NS">
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="intraStocksStartDate" class="block text-sm font-medium text-slate-700 mb-1">Start Date (Fixed)</label>
+                                    <input type="date" id="intraStocksStartDate" name="intraStocksStartDate" class="form-input" value="2023-01-01">
+                                </div>
+                                <div>
+                                    <label for="intraStocksEndDate" class="block text-sm font-medium text-slate-700 mb-1">End Date (Fixed)</label>
+                                    <input type="date" id="intraStocksEndDate" name="intraStocksEndDate" class="form-input" value="2023-12-31">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="intraCompareTimelinesGroup" class="mb-4 hidden space-y-4">
+                            <div>
+                                <label for="intraTimelineStock" class="block text-sm font-medium text-slate-700 mb-1">Stock Ticker (Fixed)</label>
+                                <input type="text" id="intraTimelineStock" name="intraTimelineStock" class="form-input" placeholder="RELIANCE.NS" value="RELIANCE.NS">
+                            </div>
+                            <p class="text-sm text-slate-600">Define up to 2 timelines for comparison:</p>
+                            <div class="p-3 border border-slate-200 rounded-md space-y-2">
+                                 <label class="block text-xs font-medium text-slate-500">Timeline 1</label>
+                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                     <div>
+                                        <label for="intraTimeline1Start" class="block text-xs font-medium text-slate-700 mb-1">Start Date</label>
+                                        <input type="date" id="intraTimeline1Start" name="intraTimeline1Start" class="form-input text-sm" value="2022-01-01">
+                                    </div>
+                                    <div>
+                                        <label for="intraTimeline1End" class="block text-xs font-medium text-slate-700 mb-1">End Date</label>
+                                        <input type="date" id="intraTimeline1End" name="intraTimeline1End" class="form-input text-sm" value="2022-12-31">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-3 border border-slate-200 rounded-md space-y-2">
+                                <label class="block text-xs font-medium text-slate-500">Timeline 2</label>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                     <div>
+                                        <label for="intraTimeline2Start" class="block text-xs font-medium text-slate-700 mb-1">Start Date</label>
+                                        <input type="date" id="intraTimeline2Start" name="intraTimeline2Start" class="form-input text-sm" value="2023-01-01">
+                                    </div>
+                                    <div>
+                                        <label for="intraTimeline2End" class="block text-xs font-medium text-slate-700 mb-1">End Date</label>
+                                        <input type="date" id="intraTimeline2End" name="intraTimeline2End" class="form-input text-sm" value="2023-12-31">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-teal">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12A2.25 2.25 0 0 0 20.25 14.25V3m-15.75 0h15.75M3.75 0v.01M3.75 3a.75.75 0 0 1 .75-.75h15a.75.75 0 0 1 .75.75M3.75 21v-6.75A2.25 2.25 0 0 1 6 12h12a2.25 2.25 0 0 1 2.25 2.25V21m-15.75 0H18" /></svg>
+                            Compare Intra-Strategy
+                        </button>
+                    </form>
+                     <div id="intraComparisonResults" class="mt-6 hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-lg font-semibold text-slate-700">Comparison Chart</h4>
+                             <button id="saveIntraComparisonBtn" onclick="promptSaveComparison('intra')" class="btn btn-success btn-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.663V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.663L18.288 5.338A2.25 2.25 0 0 0 16.138 3.75H14.25M9 3.75 12 3m0 0 3-3.75M12 3v5.732A9.001 9.001 0 0 0 6.708 21M12 3c.891 0 1.734.178 2.5.513M15 3.75 12 3m0 0-3-3.75M12 3C11.109 3 10.266.178 9.5.513" /></svg>
+                                Save Comparison
+                            </button>
+                        </div>
+                        <canvas id="intraStrategyChart" height="120"></canvas>
+                        <h4 class="text-lg font-semibold text-slate-700 mt-6 mb-2">Metrics Table</h4>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full table">
+                                <thead><tr><th id="intraTableHeader">Parameter</th><th>PnL</th><th>Sharpe Ratio</th></tr></thead>
+                                <tbody id="intraMetricsTable" class="text-sm text-slate-700"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="comparisonHistoryView" class="view">
+            <h2 class="text-3xl font-semibold text-slate-800 mb-6">Comparison History</h2>
+            <div class="card mb-8">
+                <h3 class="text-xl font-semibold text-slate-700 mb-4">Inter-Strategy Comparisons</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr><th>Name</th><th>Date Saved</th><th>Stocks</th><th>Period</th><th>Strategies Compared</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="interComparisonHistoryTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                    <p id="noInterComparisonsMessage" class="text-center text-slate-500 py-4 hidden">No inter-strategy comparisons saved yet.</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3 class="text-xl font-semibold text-slate-700 mb-4">Intra-Strategy Comparisons</h3>
+                 <div class="overflow-x-auto">
+                    <table class="min-w-full table">
+                        <thead>
+                            <tr><th>Name</th><th>Date Saved</th><th>Strategy</th><th>Compared By</th><th>Parameters</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="intraComparisonHistoryTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                    <p id="noIntraComparisonsMessage" class="text-center text-slate-500 py-4 hidden">No intra-strategy comparisons saved yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="profileView" class="view">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-semibold text-slate-800">My Profile</h2>
+                <button id="editProfileBtn" onclick="toggleProfileEdit(true)" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+                    Edit Profile
+                </button>
+            </div>
+            <div class="card">
+                <div id="profileDisplaySection">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-500">Full Name</label>
+                        <p id="profileDisplayName" class="text-lg text-slate-700"></p>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-500">Email Address</label>
+                        <p id="profileDisplayEmail" class="text-lg text-slate-700"></p>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-500">Trading Experience</label>
+                        <p id="profileDisplayExperience" class="text-lg text-slate-700"></p>
+                    </div>
+                </div>
+                <form id="profileEditForm" class="hidden space-y-4" onsubmit="event.preventDefault(); saveProfile();">
+                    <div>
+                        <label for="profileEditName" class="block text-sm font-medium text-slate-700">Full Name</label>
+                        <input type="text" id="profileEditName" class="form-input mt-1">
+                    </div>
+                    <div>
+                        <label for="profileEditEmail" class="block text-sm font-medium text-slate-700">Email Address</label>
+                        <input type="email" id="profileEditEmail" class="form-input mt-1">
+                    </div>
+                    <div>
+                        <label for="profileEditExperience" class="block text-sm font-medium text-slate-700">Trading Experience</label>
+                        <select id="profileEditExperience" class="form-select mt-1">
+                            <option value="Beginner">Beginner</option>
+                            <option value="Intermediate">Intermediate</option>
+                            <option value="Advanced">Advanced</option>
+                            <option value="Professional">Professional</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="submit" class="btn btn-success">Save Changes</button>
+                        <button type="button" onclick="toggleProfileEdit(false)" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="messageModal" class="modal items-center justify-center">
+             <div class="modal-content">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 id="modalTitle" class="text-xl font-semibold text-slate-800">Notification</h3>
+                    <button onclick="closeModal('messageModal')" class="text-slate-400 hover:text-slate-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <p id="modalMessage" class="text-slate-600 mb-6"></p>
+                <div class="text-right">
+                    <button onclick="closeModal('messageModal')" class="btn btn-primary">OK</button>
+                </div>
+            </div>
+        </div>
+        <div id="nameComparisonModal" class="modal items-center justify-center">
+            <div class="modal-content">
+                <h3 class="text-xl font-semibold text-slate-800 mb-4">Save Comparison</h3>
+                <p class="text-slate-600 mb-1">Enter a name for this comparison:</p>
+                <input type="text" id="comparisonNameInput" class="form-input mb-6" placeholder="e.g., MA Crossover vs RSI (Q1 2023)">
+                <input type="hidden" id="comparisonTypeToSave">
+                <div class="text-right space-x-3">
+                    <button onclick="executeSaveComparison()" class="btn btn-success">Save</button>
+                    <button onclick="closeModal('nameComparisonModal')" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Global State & Data (Mock) ---
+        let currentUser = null; 
+        let strategies = [
+            { id: 's1', name: 'MA Crossover Basic', logic: 'avg(close, 10) > avg(close, 50)', createdDate: '2024-05-01', lastModified: '2024-05-10' },
+            { id: 's2', name: 'RSI Momentum', logic: 'rsi(14) < 30 AND close > open', createdDate: '2024-04-15', lastModified: '2024-05-01' },
+            { id: 's3', name: 'Volume Spike Alert', logic: 'volume > avg(volume, 20) * 2', createdDate: '2024-05-20', lastModified: '2024-05-20' }
+        ];
+        let backtestRuns = [
+            { id: 'r1', strategyId: 's1', strategyName: 'MA Crossover Basic', stocks: 'RELIANCE.NS', period: '2023-01-01 to 2023-06-30', dateRun: '2024-05-11', pnl: 1250.50, sharpeRatio: 1.2, portfolioData: [10000,10100,10050,10200,10350,11250.50], detailedPnl: [] },
+            { id: 'r2', strategyId: 's2', strategyName: 'RSI Momentum', stocks: 'TCS.NS', period: '2023-01-01 to 2023-03-31', dateRun: '2024-05-02', pnl: -250.00, sharpeRatio: -0.5, portfolioData: [10000,9900,9800,9750], detailedPnl: [] },
+            { id: 'r3', strategyId: 's1', strategyName: 'MA Crossover Basic', stocks: 'INFY.NS', period: '2022-01-01 to 2022-12-31', dateRun: '2024-04-15', pnl: 3400.75, sharpeRatio: 1.8, portfolioData: [10000,10500,11000,12000,11500,13400.75], detailedPnl: [] }
+        ];
+        
+        backtestRuns.forEach(run => {
+            if (!run.detailedPnl || run.detailedPnl.length === 0) {
+                 run.detailedPnl = Array.from({length:10}, (_,i)=>{
+                     const date = new Date(new Date(run.period.split(' to ')[0]).getTime() + i * 24*60*60*1000).toISOString().split('T')[0];
+                     return {date: date, dailyPnl:(Math.random()*100-20).toFixed(2), cumulativePnl:0, portfolioValue:0};
+                 });
+            }
+            let cumulative = 0; let portVal = 10000; // Assuming starting portfolio value of 10000 for mock
+            run.detailedPnl.forEach(item => {
+                let dailyPnlNum = parseFloat(item.dailyPnl);
+                cumulative += dailyPnlNum;
+                portVal += dailyPnlNum; // This is a simplified calculation
+                item.cumulativePnl = cumulative.toFixed(2);
+                item.portfolioValue = portVal.toFixed(2);
+            });
+        });
+
+        let currentBacktestResult = null; 
+        let currentInterComparisonData = null; 
+        let currentIntraComparisonData = null; 
+        let savedComparisons = [];
+
+        let portfolioChartInstance = null;
+        let interStrategyChartInstance = null;
+        let intraStrategyChartInstance = null;
+
+        const appSidebar = document.getElementById('appSidebar');
+        const mainContent = document.getElementById('mainContent');
+        const userInfoDisplay = document.getElementById('userInfoDisplay');
+        const userDisplayName = document.getElementById('userDisplayName');
+        const userDisplayEmail = document.getElementById('userDisplayEmail');
+
+        function showView(viewId, activeLinkEl = null) {
+            document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.classList.add('active-view');
+            } else {
+                console.error("View not found:", viewId);
+                if (currentUser) showView('dashboardView', document.querySelector('a[onclick*="dashboardView"]')); // Fallback to dashboard
+                else logoutUser(); // Fallback to login if view is missing and not logged in
+                return;
+            }
+
+
+            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+            if (activeLinkEl) {
+                activeLinkEl.classList.add('active');
+            } else {
+                const matchingLink = document.querySelector(`.sidebar-link[onclick*="${viewId}"]`);
+                if (matchingLink) matchingLink.classList.add('active');
+            }
+            
+            if (!currentUser && !['loginView', 'registerView'].includes(viewId)) {
+                logoutUser(); 
+                return;
+            }
+
+            switch(viewId) {
+                case 'dashboardView': loadDashboardData(); break;
+                case 'strategiesView': loadMyStrategies(); break;
+                case 'runBacktestView': populateStrategyDropdown('backtestStrategy'); break;
+                case 'backtestHistoryView': loadBacktestHistory(); break;
+                case 'comparisonView': 
+                    populateStrategyDropdown('interCompareStrategies', true);
+                    populateStrategyDropdown('intraCompareStrategy');
+                    const activeTabButton = document.querySelector('#comparisonView .tab-button.active');
+                    if (!activeTabButton) { // If no tab is active, default to inter
+                        showComparisonTab('interCompareTabContent', document.querySelector('#comparisonView .tab-button[onclick*="interCompareTabContent"]'));
+                    }
+                    break;
+                case 'comparisonHistoryView': loadComparisonHistory(); break;
+                case 'profileView': loadProfileData(); break;
+            }
+        }
+
+        function showComparisonTab(tabId, tabButtonEl) {
+            document.querySelectorAll('#comparisonView .tab-content').forEach(tc => tc.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('#comparisonView .tab-button').forEach(tb => tb.classList.remove('active'));
+            tabButtonEl.classList.add('active');
+        }
+        
+        function showModal(modalId, title, message) {
+            const modal = document.getElementById(modalId);
+            if (!modal) { console.error("Modal not found:", modalId); return; }
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            modal.style.display = 'flex';
+        }
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) modal.style.display = 'none';
+        }
+        function generateId() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+        function formatDate(dateStr) { 
+            if (!dateStr) return 'N/A';
+            return new Date(dateStr).toLocaleDateString('en-CA');
+        }
+
+        function loginUser() {
+            const email = document.getElementById('login-email-address').value;
+            if (email === "user@example.com" && document.getElementById('login-password').value === "password") {
+                currentUser = { 
+                    name: 'Demo User', email: email, token: 'fake-jwt-token', id: 'user123', experience: 'Intermediate'
+                };
+                showModal('messageModal', 'Login Successful', `Welcome back, ${currentUser.name}!`);
+                appSidebar.classList.remove('hidden');
+                mainContent.classList.remove('ml-0', 'w-full');
+                mainContent.classList.add('ml-64');
+                userInfoDisplay.classList.remove('hidden');
+                userDisplayName.textContent = currentUser.name;
+                userDisplayEmail.textContent = currentUser.email;
+                showView('dashboardView', document.querySelector('a[onclick*="dashboardView"]'));
+            } else {
+                showModal('messageModal', 'Login Failed', 'Invalid email or password.');
+            }
+        }
+
+        function registerUser() {
+            showModal('messageModal', 'Registration Successful', 'You can now log in with your new account (mock).');
+            showView('loginView', document.querySelector('.sidebar-link[onclick*="loginView"]'));
+        }
+
+
+        function logoutUser() {
+            currentUser = null;
+            appSidebar.classList.add('hidden');
+            mainContent.classList.add('ml-0', 'w-full');
+            mainContent.classList.remove('ml-64');
+            userInfoDisplay.classList.add('hidden');
+            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+            showView('loginView'); 
+        }
+        
+        function loadDashboardData() {
+            if (!currentUser) return;
+            document.getElementById('totalStrategiesStat').textContent = strategies.length;
+            document.getElementById('totalBacktestsStat').textContent = backtestRuns.length;
+            const recentRunsTable = document.getElementById('recentBacktestsTable');
+            recentRunsTable.innerHTML = '';
+            const recent = [...backtestRuns].sort((a,b) => new Date(b.dateRun) - new Date(a.dateRun)).slice(0, 3);
+            recent.forEach(run => {
+                const row = recentRunsTable.insertRow();
+                row.innerHTML = `
+                    <td class="py-3 px-4">${run.id.substring(3,8)}</td>
+                    <td class="py-3 px-4">${run.strategyName}</td>
+                    <td class="py-3 px-4">${formatDate(run.dateRun)}</td>
+                    <td class="py-3 px-4 ${run.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'} font-medium">${run.pnl.toFixed(2)}</td>
+                    <td class="py-3 px-4 font-medium">${run.sharpeRatio.toFixed(2)}</td>
+                    <td class="py-3 px-4"><button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" onclick="viewBacktestDetails('${run.id}')">View</button></td>
+                `;
+            });
+        }
+
+        function loadMyStrategies() {
+            if (!currentUser) return;
+            const tableBody = document.getElementById('myStrategiesTable');
+            tableBody.innerHTML = '';
+            strategies.forEach(s => {
+                const stratBacktestsCount = backtestRuns.filter(br => br.strategyId === s.id).length;
+                const row = tableBody.insertRow();
+                row.innerHTML = `
+                    <td class="py-3 px-4 font-medium">${s.name}</td>
+                    <td class="py-3 px-4">${formatDate(s.createdDate)}</td>
+                    <td class="py-3 px-4">${formatDate(s.lastModified)}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium underline" onclick="viewStrategyBacktests('${s.id}')">
+                            View (${stratBacktestsCount})
+                        </button>
+                    </td>
+                    <td class="py-3 px-4 space-x-2">
+                        <button class="text-blue-600 hover:text-blue-800 text-xs font-medium" onclick="editStrategy('${s.id}')">EDIT</button>
+                        <button class="text-red-600 hover:text-red-800 text-xs font-medium" onclick="deleteStrategy('${s.id}')">DELETE</button>
+                    </td>
+                `;
+            });
+        }
+        
+        function clearStrategyForm() {
+            const form = document.getElementById('strategyForm');
+            if (form) form.reset();
+            const strategyIdField = document.getElementById('strategyId');
+            if (strategyIdField) strategyIdField.value = '';
+        }
+
+
+        function saveStrategy() {
+            const id = document.getElementById('strategyId').value;
+            const name = document.getElementById('strategyName').value;
+            const logic = document.getElementById('strategyLogic').value;
+            const now = new Date().toISOString().split('T')[0];
+
+            if (id) {
+                const index = strategies.findIndex(s => s.id === id);
+                if (index > -1) strategies[index] = { ...strategies[index], name, logic, lastModified: now };
+            } else {
+                strategies.push({ id: generateId(), name, logic, createdDate: now, lastModified: now });
+            }
+            showModal('messageModal', 'Strategy Saved', `Strategy "${name}" has been successfully saved.`);
+            clearStrategyForm();
+            showView('strategiesView', document.querySelector('a[onclick*="strategiesView"]'));
+        }
+
+        function editStrategy(id) {
+            const strategy = strategies.find(s => s.id === id);
+            if (strategy) {
+                document.getElementById('strategyId').value = strategy.id;
+                document.getElementById('strategyName').value = strategy.name;
+                document.getElementById('strategyLogic').value = strategy.logic;
+                showView('createStrategyView', document.querySelector('a[onclick*="createStrategyView"]'));
+            }
+        }
+
+        function deleteStrategy(id) {
+            strategies = strategies.filter(s => s.id !== id);
+            loadMyStrategies(); // Refresh the list
+            showModal('messageModal', 'Strategy Deleted', 'The selected strategy has been deleted.');
+        }
+        
+        function populateStrategyDropdown(selectId, multiple = false) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            select.innerHTML = '';
+            if (!multiple && select.options.length === 0) {
+                 const defaultOption = document.createElement('option');
+                 defaultOption.value = "";
+                 defaultOption.textContent = "Choose a strategy...";
+                 defaultOption.disabled = true;
+                 defaultOption.selected = true;
+                 select.appendChild(defaultOption);
+            }
+            strategies.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.id;
+                option.textContent = s.name;
+                select.appendChild(option);
+            });
+        }
+
+        function viewStrategyBacktests(strategyId) {
+            const strategy = strategies.find(s => s.id === strategyId);
+            if (!strategy) { showModal('messageModal', 'Error', 'Strategy not found.'); return; }
+            
+            document.getElementById('strategyBacktestsName').textContent = strategy.name;
+            const tableBody = document.getElementById('strategyBacktestsTable');
+            const noRunsMessage = document.getElementById('noStrategyBacktestsMessage');
+            tableBody.innerHTML = '';
+            const relevantRuns = backtestRuns.filter(run => run.strategyId === strategyId)
+                                        .sort((a,b) => new Date(b.dateRun) - new Date(a.dateRun));
+
+            if (relevantRuns.length === 0) {
+                noRunsMessage.classList.remove('hidden');
+                tableBody.classList.add('hidden'); // Ensure table is hidden if no runs
+            } else {
+                noRunsMessage.classList.add('hidden');
+                tableBody.classList.remove('hidden'); // Ensure table is shown
+                relevantRuns.forEach(run => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td class="py-3 px-4">${run.id.substring(3,8)}</td>
+                        <td class="py-3 px-4">${run.stocks}</td>
+                        <td class="py-3 px-4">${run.period}</td>
+                        <td class="py-3 px-4">${formatDate(run.dateRun)}</td>
+                        <td class="py-3 px-4 ${run.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'} font-medium">${run.pnl.toFixed(2)}</td>
+                        <td class="py-3 px-4 font-medium">${run.sharpeRatio.toFixed(2)}</td>
+                        <td class="py-3 px-4"><button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" onclick="viewBacktestDetails('${run.id}')">DETAILS</button></td>
+                    `;
+                });
+            }
+            showView('strategyBacktestsView', document.querySelector('a[onclick*="strategiesView"]'));
+        }
+
+        function runBacktest() {
+            const strategyId = document.getElementById('backtestStrategy').value;
+            if (!strategyId) { showModal('messageModal', 'Input Error', 'Please select a strategy.'); return; }
+            const strategy = strategies.find(s => s.id === strategyId);
+            const stocks = document.getElementById('backtestStocks').value;
+            let startDateStr = document.getElementById('backtestStartDate').value;
+            let endDateStr = document.getElementById('backtestEndDate').value;
+            const lookbackYears = parseInt(document.getElementById('backtestLookback').value);
+
+            if (lookbackYears > 0) {
+                const today = new Date();
+                endDateStr = today.toISOString().split('T')[0];
+                const pastDate = new Date(today);
+                pastDate.setFullYear(today.getFullYear() - lookbackYears);
+                startDateStr = pastDate.toISOString().split('T')[0];
+            }
+            
+            const pnl = (Math.random() * 10000 - 2000);
+            const sharpe = (Math.random() * 3 - 1);
+            const portfolioData = Array.from({length: 30}, (_, i) => 10000 + (Math.random() - 0.4) * 500 * i);
+            const detailedPnlData = Array.from({length: 10}, (_, i) => {
+                let dailyPnl = (Math.random() * 200 - 100);
+                return {
+                    date: new Date(new Date(startDateStr).getTime() + i * 24*60*60*1000).toISOString().split('T')[0],
+                    dailyPnl: dailyPnl.toFixed(2), cumulativePnl: 0, portfolioValue: 0
+                };
+            });
+            let cumulative = 0; let portVal = 10000;
+            detailedPnlData.forEach(item => {
+                let dailyPnlNum = parseFloat(item.dailyPnl);
+                cumulative += dailyPnlNum; portVal += dailyPnlNum;
+                item.cumulativePnl = cumulative.toFixed(2); item.portfolioValue = portVal.toFixed(2);
+            });
+
+            currentBacktestResult = {
+                strategyId: strategy.id, strategyName: strategy.name, stocks: stocks,
+                period: `${formatDate(startDateStr)} to ${formatDate(endDateStr)}`,
+                pnl: pnl, sharpeRatio: sharpe, portfolioData: portfolioData, detailedPnl: detailedPnlData
+            };
+            
+            displayBacktestResults(currentBacktestResult);
+            showView('backtestResultsView', document.querySelector('a[onclick*="backtestHistoryView"]'));
+        }
+
+        function displayBacktestResults(result) {
+            document.getElementById('resultStrategyName').textContent = result.strategyName;
+            document.getElementById('resultStocks').textContent = result.stocks;
+            document.getElementById('resultPeriod').textContent = result.period;
+            const pnlEl = document.getElementById('resultPnl');
+            pnlEl.textContent = `$${result.pnl.toFixed(2)}`;
+            pnlEl.className = `text-3xl font-bold ${result.pnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`;
+            document.getElementById('resultSharpe').textContent = result.sharpeRatio.toFixed(2);
+
+            const detailedTableBody = document.getElementById('detailedPnlTable');
+            detailedTableBody.innerHTML = '';
+            if (result.detailedPnl && result.detailedPnl.length > 0) {
+                result.detailedPnl.forEach(item => {
+                    const row = detailedTableBody.insertRow();
+                    row.innerHTML = `
+                        <td class="py-2 px-3">${formatDate(item.date)}</td>
+                        <td class="py-2 px-3 ${parseFloat(item.dailyPnl) >= 0 ? 'text-emerald-600' : 'text-red-600'}">${item.dailyPnl}</td>
+                        <td class="py-2 px-3 ${parseFloat(item.cumulativePnl) >= 0 ? 'text-emerald-600' : 'text-red-600'}">${item.cumulativePnl}</td>
+                        <td class="py-2 px-3">${item.portfolioValue}</td>
+                    `;
+                });
+            }
+
+            const ctx = document.getElementById('portfolioChart').getContext('2d');
+            if (portfolioChartInstance) portfolioChartInstance.destroy();
+            portfolioChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: result.portfolioData.map((_, i) => `Day ${i + 1}`),
+                    datasets: [{
+                        label: 'Portfolio Value', data: result.portfolioData,
+                        borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.1, fill: true
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: false } } }
+            });
+        }
+        
+        function saveBacktestRun() {
+            if (currentBacktestResult) {
+                const newRun = { ...currentBacktestResult, id: generateId(), dateRun: new Date().toISOString().split('T')[0] };
+                backtestRuns.push(newRun);
+                showModal('messageModal', 'Run Saved', 'The backtest run has been saved to your history.');
+                currentBacktestResult = null;
+                loadBacktestHistory();
+            } else {
+                showModal('messageModal', 'Error', 'No active backtest result to save.');
+            }
+        }
+
+        function loadBacktestHistory() {
+            if (!currentUser) return;
+            const tableBody = document.getElementById('backtestHistoryTable');
+            tableBody.innerHTML = '';
+            [...backtestRuns].sort((a,b) => new Date(b.dateRun) - new Date(a.dateRun)).forEach(run => {
+                const row = tableBody.insertRow();
+                row.innerHTML = `
+                    <td class="py-3 px-4">${run.id.substring(3,8)}</td>
+                    <td class="py-3 px-4">${run.strategyName}</td>
+                    <td class="py-3 px-4">${run.stocks}</td>
+                    <td class="py-3 px-4">${run.period}</td>
+                    <td class="py-3 px-4">${formatDate(run.dateRun)}</td>
+                    <td class="py-3 px-4 ${run.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'} font-medium">${run.pnl.toFixed(2)}</td>
+                    <td class="py-3 px-4 font-medium">${run.sharpeRatio.toFixed(2)}</td>
+                    <td class="py-3 px-4"><button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" onclick="viewBacktestDetails('${run.id}')">DETAILS</button></td>
+                `;
+            });
+        }
+        
+        function viewBacktestDetails(runId) {
+            const run = backtestRuns.find(r => r.id === runId);
+            if (run) {
+                currentBacktestResult = run; 
+                displayBacktestResults(run);
+                showView('backtestResultsView', document.querySelector('a[onclick*="backtestHistoryView"]'));
+            } else {
+                showModal('messageModal', 'Error', 'Could not find details for the selected backtest run.');
+            }
+        }
+
+        function runInterStrategyComparison() {
+            const selectedStrategyIds = Array.from(document.getElementById('interCompareStrategies').selectedOptions).map(opt => opt.value);
+            if (selectedStrategyIds.length < 2) { 
+                showModal('messageModal', 'Input Error', 'Please select at least two strategies for comparison.'); return; 
+            }
+            const stocks = document.getElementById('interCompareStocks').value;
+            const startDate = document.getElementById('interCompareStartDate').value;
+            const endDate = document.getElementById('interCompareEndDate').value;
+            
+            const resultsContainer = document.getElementById('interComparisonResults');
+            const metricsTableBody = document.getElementById('interMetricsTable');
+            metricsTableBody.innerHTML = '';
+            const datasets = [];
+            const chartColors = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'];
+            let resultsSummaryForSave = [];
+
+            selectedStrategyIds.forEach((id, index) => {
+                const strategy = strategies.find(s => s.id === id);
+                if (!strategy) return; // Should not happen if dropdown is populated correctly
+                const pnl = (Math.random() * 5000 - 1000);
+                const sharpe = (Math.random() * 2.5 - 0.5);
+                const portfolioData = Array.from({length: 30}, (_, i) => 10000 + (Math.random() - 0.4) * (300 + index * 100) * i);
+                resultsSummaryForSave.push({ strategyId: id, name: strategy.name, pnl: pnl, sharpe: sharpe, portfolioData }); // Store portfolioData for potential re-charting
+                
+                const row = metricsTableBody.insertRow();
+                row.innerHTML = `<td>${strategy.name}</td><td class="${pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}">${pnl.toFixed(2)}</td><td>${sharpe.toFixed(2)}</td>`;
+                datasets.push({ label: strategy.name, data: portfolioData, borderColor: chartColors[index % chartColors.length], tension: 0.1, fill: false });
+            });
+            
+            currentInterComparisonData = {
+                type: 'inter',
+                params: { stocks, period: `${formatDate(startDate)} to ${formatDate(endDate)}`, strategyIds: selectedStrategyIds, strategyNames: resultsSummaryForSave.map(r => r.name) },
+                resultsSummary: resultsSummaryForSave.map(r => ({name: r.name, pnl: r.pnl, sharpe: r.sharpe})),
+                chartData: { labels: Array.from({length: 30}, (_, i) => `Day ${i+1}`), datasets }
+            };
+            
+            const ctx = document.getElementById('interStrategyChart').getContext('2d');
+            if (interStrategyChartInstance) interStrategyChartInstance.destroy();
+            interStrategyChartInstance = new Chart(ctx, { type: 'line', data: currentInterComparisonData.chartData, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: false } } } });
+            resultsContainer.classList.remove('hidden');
+        }
+
+        function runIntraStrategyComparison() {
+            const strategyId = document.getElementById('intraCompareStrategy').value;
+            if (!strategyId) { showModal('messageModal', 'Input Error', 'Please select a strategy.'); return; }
+            const strategy = strategies.find(s => s.id === strategyId);
+            if(!strategy) { showModal('messageModal', 'Error', 'Strategy not found.'); return; }
+
+            const compareType = document.querySelector('input[name="intraCompareType"]:checked').value;
+            const resultsContainer = document.getElementById('intraComparisonResults');
+            const metricsTableBody = document.getElementById('intraMetricsTable');
+            const tableHeader = document.getElementById('intraTableHeader');
+            metricsTableBody.innerHTML = '';
+            const datasets = [];
+            const chartColors = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'];
+            let resultsSummaryForSave = [];
+            let paramsForSave = { strategyId, strategyName: strategy.name, compareType };
+            let itemsToCompare = [];
+
+            if (compareType === 'stocks') {
+                tableHeader.textContent = 'Stock Ticker';
+                const stocksListStr = document.getElementById('intraCompareStocksList').value;
+                itemsToCompare = stocksListStr.split(',').map(s => s.trim()).filter(s => s);
+                const startDate = document.getElementById('intraStocksStartDate').value;
+                const endDate = document.getElementById('intraStocksEndDate').value;
+                if (itemsToCompare.length === 0) { showModal('messageModal', 'Input Error', 'Please enter at least one stock ticker.'); return; }
+                paramsForSave.stocks = itemsToCompare;
+                paramsForSave.period = `${formatDate(startDate)} to ${formatDate(endDate)}`;
+
+                itemsToCompare.forEach((stock, index) => {
+                    const pnl = (Math.random() * 3000 - 800); const sharpe = (Math.random() * 2.0 - 0.3);
+                    const portfolioData = Array.from({length: 30}, (_, i) => 10000 + (Math.random() - 0.4) * (200 + index * 50) * i);
+                    resultsSummaryForSave.push({ parameterValue: stock, pnl, sharpe, portfolioData });
+                    const row = metricsTableBody.insertRow();
+                    row.innerHTML = `<td>${stock}</td><td class="${pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}">${pnl.toFixed(2)}</td><td>${sharpe.toFixed(2)}</td>`;
+                    datasets.push({ label: `${stock}`, data: portfolioData, borderColor: chartColors[index % chartColors.length], tension: 0.1, fill: false });
+                });
+            } else { // timelines
+                tableHeader.textContent = 'Timeline';
+                const stock = document.getElementById('intraTimelineStock').value;
+                if (!stock) { showModal('messageModal', 'Input Error', 'Please enter a stock ticker.'); return; }
+                paramsForSave.stock = stock;
+                const timelinesData = [];
+                if (document.getElementById('intraTimeline1Start').value && document.getElementById('intraTimeline1End').value) {
+                    timelinesData.push({ start: document.getElementById('intraTimeline1Start').value, end: document.getElementById('intraTimeline1End').value, label: `T1: ${formatDate(document.getElementById('intraTimeline1Start').value)} - ${formatDate(document.getElementById('intraTimeline1End').value)}` });
+                }
+                if (document.getElementById('intraTimeline2Start').value && document.getElementById('intraTimeline2End').value) {
+                     timelinesData.push({ start: document.getElementById('intraTimeline2Start').value, end: document.getElementById('intraTimeline2End').value, label: `T2: ${formatDate(document.getElementById('intraTimeline2Start').value)} - ${formatDate(document.getElementById('intraTimeline2End').value)}` });
+                }
+                if (timelinesData.length === 0) { showModal('messageModal', 'Input Error', 'Define at least one timeline.'); return; }
+                paramsForSave.timelines = timelinesData.map(t => ({start: t.start, end: t.end})); // Store raw dates for potential re-use
+                itemsToCompare = timelinesData;
+
+                itemsToCompare.forEach((timeline, index) => {
+                    const pnl = (Math.random() * 4000 - 1500); const sharpe = (Math.random() * 2.2 - 0.4);
+                    const portfolioData = Array.from({length: 30}, (_, i) => 10000 + (Math.random() - 0.4) * (250 + index * 70) * i);
+                    resultsSummaryForSave.push({ parameterValue: timeline.label, pnl, sharpe, portfolioData });
+                    const row = metricsTableBody.insertRow();
+                    row.innerHTML = `<td>${timeline.label}</td><td class="${pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}">${pnl.toFixed(2)}</td><td>${sharpe.toFixed(2)}</td>`;
+                    datasets.push({ label: timeline.label, data: portfolioData, borderColor: chartColors[index % chartColors.length], tension: 0.1, fill: false });
+                });
+            }
+            
+            currentIntraComparisonData = {
+                type: 'intra',
+                params: paramsForSave,
+                resultsSummary: resultsSummaryForSave.map(r => ({parameterValue: r.parameterValue, pnl: r.pnl, sharpe: r.sharpe})),
+                chartData: { labels: Array.from({length: 30}, (_, i) => `Day ${i+1}`), datasets }
+            };
+            
+            const ctx = document.getElementById('intraStrategyChart').getContext('2d');
+            if (intraStrategyChartInstance) intraStrategyChartInstance.destroy();
+            intraStrategyChartInstance = new Chart(ctx, { type: 'line', data: currentIntraComparisonData.chartData, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: false } } } });
+            resultsContainer.classList.remove('hidden');
+        }
+
+        function toggleIntraCompareFields() {
+            const type = document.querySelector('input[name="intraCompareType"]:checked').value;
+            const stocksGroup = document.getElementById('intraCompareStocksGroup');
+            const timelinesGroup = document.getElementById('intraCompareTimelinesGroup');
+            
+            document.getElementById('intraCompareStocksList').required = (type === 'stocks');
+            document.getElementById('intraStocksStartDate').required = (type === 'stocks');
+            document.getElementById('intraStocksEndDate').required = (type === 'stocks');
+            document.getElementById('intraTimelineStock').required = (type === 'timelines');
+            document.getElementById('intraTimeline1Start').required = (type === 'timelines');
+            document.getElementById('intraTimeline1End').required = (type === 'timelines');
+            document.getElementById('intraTimeline2Start').required = false; 
+            document.getElementById('intraTimeline2End').required = false;
+
+            if (type === 'stocks') {
+                stocksGroup.classList.remove('hidden');
+                timelinesGroup.classList.add('hidden');
+            } else {
+                stocksGroup.classList.add('hidden');
+                timelinesGroup.classList.remove('hidden');
+            }
+        }
+
+        function promptSaveComparison(type) {
+            document.getElementById('comparisonTypeToSave').value = type;
+            document.getElementById('comparisonNameInput').value = '';
+            const nameModal = document.getElementById('nameComparisonModal');
+            if (nameModal) {
+                 nameModal.style.display = 'flex'; // Use flex for modals with items-center
+            } else {
+                showModal('messageModal', 'Error', 'Save comparison dialog not found.'); // Fallback
+            }
+        }
+
+        function executeSaveComparison() {
+            const name = document.getElementById('comparisonNameInput').value.trim();
+            const type = document.getElementById('comparisonTypeToSave').value;
+            if (!name) { showModal('messageModal', 'Input Error', 'Please enter a name for the comparison.'); return; }
+
+            let dataToSave;
+            if (type === 'inter' && currentInterComparisonData) {
+                dataToSave = { ...currentInterComparisonData, id: generateId(), name, dateSaved: new Date().toISOString().split('T')[0] };
+            } else if (type === 'intra' && currentIntraComparisonData) {
+                dataToSave = { ...currentIntraComparisonData, id: generateId(), name, dateSaved: new Date().toISOString().split('T')[0] };
+            } else {
+                showModal('messageModal', 'Error', 'No comparison data found to save.');
+                closeModal('nameComparisonModal'); return;
+            }
+            
+            savedComparisons.push(dataToSave);
+            closeModal('nameComparisonModal');
+            showModal('messageModal', 'Comparison Saved', `Comparison "${name}" has been saved successfully.`);
+            loadComparisonHistory(); 
+        }
+
+        function loadComparisonHistory() {
+            if(!currentUser) return;
+            const interTableBody = document.getElementById('interComparisonHistoryTable');
+            const intraTableBody = document.getElementById('intraComparisonHistoryTable');
+            const noInterMsg = document.getElementById('noInterComparisonsMessage');
+            const noIntraMsg = document.getElementById('noIntraComparisonsMessage');
+
+            interTableBody.innerHTML = ''; intraTableBody.innerHTML = '';
+            const interSaved = savedComparisons.filter(c => c.type === 'inter');
+            const intraSaved = savedComparisons.filter(c => c.type === 'intra');
+
+            noInterMsg.classList.toggle('hidden', interSaved.length > 0);
+            noIntraMsg.classList.toggle('hidden', intraSaved.length > 0);
+            
+            interTableBody.classList.toggle('hidden', interSaved.length === 0);
+            intraTableBody.classList.toggle('hidden', intraSaved.length === 0);
+
+
+            interSaved.sort((a,b) => new Date(b.dateSaved) - new Date(a.dateSaved)).forEach(c => {
+                const row = interTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${c.name}</td> <td>${formatDate(c.dateSaved)}</td>
+                    <td>${c.params.stocks}</td> <td>${c.params.period}</td>
+                    <td>${c.params.strategyNames.join(', ')}</td>
+                    <td><button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" onclick="viewSavedComparison('${c.id}')">VIEW</button></td>
+                `;
+            });
+
+            intraSaved.sort((a,b) => new Date(b.dateSaved) - new Date(a.dateSaved)).forEach(c => {
+                const row = intraTableBody.insertRow();
+                let comparedBy = c.params.compareType === 'stocks' ? 'Stocks' : 'Timelines';
+                let paramsDetail = c.params.compareType === 'stocks' 
+                    ? `${c.params.stocks.join(', ')} (${c.params.period})` 
+                    : `${c.params.stock} (${c.params.timelines.map(t=> `(${formatDate(t.start)} to ${formatDate(t.end)})`).join('; ')})`;
+                row.innerHTML = `
+                    <td>${c.name}</td> <td>${formatDate(c.dateSaved)}</td>
+                    <td>${c.params.strategyName}</td> <td>${comparedBy}</td>
+                    <td>${paramsDetail}</td>
+                    <td><button class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" onclick="viewSavedComparison('${c.id}')">VIEW</button></td>
+                `;
+            });
+        }
+        
+        function viewSavedComparison(comparisonId) {
+            const comparison = savedComparisons.find(c => c.id === comparisonId);
+            if (!comparison) { showModal('messageModal', 'Error', 'Saved comparison not found.'); return; }
+            console.log("Viewing saved comparison:", comparison);
+            showModal('messageModal', 'View Comparison', `Details for "${comparison.name}" would be displayed here by repopulating the comparison view and its chart/table. (See console for raw data).`);
+            
+            // Full implementation would involve:
+            if (comparison.type === 'inter') {
+                // 1. Populate interCompareStrategies, interCompareStocks, interCompareStartDate, interCompareEndDate from comparison.params
+                // 2. Set currentInterComparisonData = comparison;
+                // 3. Render chart using comparison.chartData in interStrategyChart
+                // 4. Populate interMetricsTable using comparison.resultsSummary
+                // 5. Show the interComparisonResults div
+                // 6. showView('comparisonView'); showComparisonTab('interCompareTabContent', ...);
+            } else { // intra
+                // 1. Populate intraCompareStrategy, intraCompareType radio
+                // 2. Based on comparison.params.compareType, populate either stock list & dates OR fixed stock & timeline dates
+                // 3. Set currentIntraComparisonData = comparison;
+                // 4. Render chart using comparison.chartData in intraStrategyChart
+                // 5. Populate intraMetricsTable using comparison.resultsSummary
+                // 6. Show the intraComparisonResults div
+                // 7. showView('comparisonView'); showComparisonTab('intraCompareTabContent', ...);
+            }
+        }
+
+        function loadProfileData() {
+            if (!currentUser) return;
+            document.getElementById('profileDisplayName').textContent = currentUser.name;
+            document.getElementById('profileDisplayEmail').textContent = currentUser.email;
+            document.getElementById('profileDisplayExperience').textContent = currentUser.experience || 'Not Set';
+
+            document.getElementById('profileEditName').value = currentUser.name;
+            document.getElementById('profileEditEmail').value = currentUser.email;
+            document.getElementById('profileEditExperience').value = currentUser.experience || 'Beginner';
+            toggleProfileEdit(false);
+        }
+
+        function toggleProfileEdit(isEditing) {
+            document.getElementById('profileDisplaySection').style.display = isEditing ? 'none' : 'block';
+            document.getElementById('profileEditForm').style.display = isEditing ? 'block' : 'none';
+            document.getElementById('editProfileBtn').style.display = isEditing ? 'none' : 'inline-flex';
+        }
+
+        function saveProfile() {
+            if (!currentUser) return;
+            currentUser.name = document.getElementById('profileEditName').value;
+            currentUser.email = document.getElementById('profileEditEmail').value;
+            currentUser.experience = document.getElementById('profileEditExperience').value;
+            
+            userDisplayName.textContent = currentUser.name; // Update sidebar display too
+            userDisplayEmail.textContent = currentUser.email;
+
+            loadProfileData(); 
+            toggleProfileEdit(false);
+            showModal('messageModal', 'Profile Updated', 'Your profile information has been updated.');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!currentUser) {
+                logoutUser(); 
+            } else {
+                appSidebar.classList.remove('hidden');
+                mainContent.classList.remove('ml-0', 'w-full');
+                mainContent.classList.add('ml-64');
+                userInfoDisplay.classList.remove('hidden');
+                userDisplayName.textContent = currentUser.name;
+                userDisplayEmail.textContent = currentUser.email;
+                showView('dashboardView', document.querySelector('a[onclick*="dashboardView"]'));
+            }
+            toggleIntraCompareFields();
+            document.getElementById('backtestLookback').value = "0";
+            const initialComparisonTabButton = document.querySelector('#comparisonView .tab-button[onclick*="interCompareTabContent"]');
+            if (initialComparisonTabButton) {
+                showComparisonTab('interCompareTabContent', initialComparisonTabButton);
+            }
+        });
+    </script>
+</body>
+</html>
